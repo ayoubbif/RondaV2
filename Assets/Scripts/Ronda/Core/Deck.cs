@@ -20,10 +20,10 @@ namespace KKL.Ronda.Core
         public Deck(IEnumerable<int> cards)
         {
             _cards = new Queue<Card>();
-            foreach (int card in cards)
+            foreach (var card in cards)
             {
-                Value value = (Value)(card % 100);
-                Suit suit = (Suit)((card - (int)value) / 100);
+                var value = (Value)(card % 100);
+                var suit = (Suit)((card - (int)value) / 100);
                 _cards.Enqueue(new Card(suit, value));
             }
         }
@@ -35,7 +35,7 @@ namespace KKL.Ronda.Core
 
         public Card[] PullCards(int amount)
         {
-            List<Card> cards = new List<Card>();
+            var cards = new List<Card>();
             for (var i = 0; i < amount && _cards.Count > 0; i++)
             {
                 cards.Add(_cards.Dequeue());
@@ -51,7 +51,7 @@ namespace KKL.Ronda.Core
             {
                 foreach (Value value in Enum.GetValues(typeof(Value)))
                 {
-                    Card cardObject = new Card(suit, value);
+                    var cardObject = new Card(suit, value);
                     _cards.Enqueue(cardObject);
                 }
             }
@@ -60,14 +60,14 @@ namespace KKL.Ronda.Core
         private void ShuffleDeck()
         {
             // Use a single Random instance to avoid potential issues with seeding.
-            Random random = new Random();
+            var random = new Random();
 
             // Fisher-Yates shuffle algorithm.
-            Card[] shuffledArray = _cards.ToArray();
-            int n = shuffledArray.Length;
+            var shuffledArray = _cards.ToArray();
+            var n = shuffledArray.Length;
             while (n > 1)
             {
-                int k = random.Next(n--);
+                var k = random.Next(n--);
                 (shuffledArray[n], shuffledArray[k]) = (shuffledArray[k], shuffledArray[n]);
             }
 

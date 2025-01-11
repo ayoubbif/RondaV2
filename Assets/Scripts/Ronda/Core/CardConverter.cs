@@ -11,7 +11,7 @@ namespace KKL.Ronda.Core
         public static int[] GetCodedCards(IEnumerable<Card> cards)
         {
             List<int> codedCards = new();
-            foreach (Card card in cards)
+            foreach (var card in cards)
             {
                 var suit = (int)card.Suit;
                 var value = (int)card.Value;
@@ -30,8 +30,8 @@ namespace KKL.Ronda.Core
 
         public static Card DecodeCodedCard(int codedCard)
         {
-            Suit suit = (Suit)(codedCard / 100);
-            Value value = (Value)(codedCard % 100);
+            var suit = (Suit)(codedCard / 100);
+            var value = (Value)(codedCard % 100);
             return new Card(suit, value);
         }
         public static Card GetCardValueFromGameObject(GameObject gameObject)
@@ -39,10 +39,10 @@ namespace KKL.Ronda.Core
             Card card = null;
 
             // Extracting card suit and value from the GameObject's name
-            string[] nameParts = gameObject.name.Split('_');
+            var nameParts = gameObject.name.Split('_');
             if (nameParts.Length == 2)
             {
-                if (int.TryParse(nameParts[0], out int suitValue) && int.TryParse(nameParts[1], out int valueValue))
+                if (int.TryParse(nameParts[0], out var suitValue) && int.TryParse(nameParts[1], out int valueValue))
                 {
                     card = new Card((Suit)suitValue, (Value)valueValue);
                 }
