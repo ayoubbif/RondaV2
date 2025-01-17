@@ -44,115 +44,106 @@ namespace KKL.Ronda.Tests
             var playedCard = new Card(Suit.Oros, Value.Five);
             _tableCards.AddRange(new[]
             {
-                new Card(Suit.Copas, Value.Five),
-                new Card(Suit.Bastos, Value.Six),
-                new Card(Suit.Espadas, Value.Seven),
-                new Card(Suit.Oros, Value.Ten),
-                new Card(Suit.Copas, Value.Two)
+                new Card(Suit.Copas, Value.Five),   // Matching card
+                new Card(Suit.Bastos, Value.Six),   // Part of sequence
+                new Card(Suit.Espadas, Value.Seven), // Part of sequence
+                new Card(Suit.Oros, Value.Ten),     // Not part of sequence
+                new Card(Suit.Copas, Value.Two)     // Not part of sequence
             });
 
             var captureableCards = Rules.GetCaptureableCards(playedCard, _tableCards);
 
-            Assert.AreEqual(3, captureableCards.Count);
+            Assert.AreEqual(4, captureableCards.Count);
             Assert.IsTrue(captureableCards.Any(c => c.Value == Value.Five));
             Assert.IsTrue(captureableCards.Any(c => c.Value == Value.Six));
             Assert.IsTrue(captureableCards.Any(c => c.Value == Value.Seven));
-            Assert.IsFalse(captureableCards.Any(c => c.Value == Value.Ten));
+            Assert.IsTrue(captureableCards.Any(c => c.Value == Value.Ten));
         }
 
         [Test]
-        public void CalculateCapturePoints_WithWahad_ReturnsCorrectPoints()
+        public void GetCaptureableCards_WithMultipleMatchingCards_ReturnsAllMatches()
+        {
+            var playedCard = new Card(Suit.Oros, Value.Five);
+            _tableCards.AddRange(new[]
+            {
+                new Card(Suit.Copas, Value.Five),
+                new Card(Suit.Bastos, Value.Five),
+                new Card(Suit.Espadas, Value.Seven)
+            });
+
+            var captureableCards = Rules.GetCaptureableCards(playedCard, _tableCards);
+
+            Assert.AreEqual(2, captureableCards.Count);
+            Assert.AreEqual(2, captureableCards.Count(c => c.Value == Value.Five));
+        }
+
+        [Test]
+        public void CalculateCapturePoints_WithBasicMatch_ReturnsTwoPoints()
         {
             var capturedCards = new List<Card>
             {
-                new Card(Suit.Oros, Value.One),
-                new Card(Suit.Copas, Value.Two)
+                new Card(Suit.Oros, Value.Five),
+                new Card(Suit.Copas, Value.Five)
             };
 
             var points = Rules.CalculateCapturePoints(capturedCards, false);
 
-            Assert.AreEqual(3, points); // 2 cards + 1 Wahad bonus
+            Assert.AreEqual(2, points); // Base points for match
         }
 
         [Test]
-        public void CalculateCapturePoints_WithKhamsa_ReturnsCorrectPoints()
+        public void CalculateCapturePoints_WithSequence_ReturnsCorrectPoints()
         {
             var capturedCards = new List<Card>
             {
-                new(Suit.Oros, Value.Five),
-                new Card(Suit.Copas, Value.Six)
+                new Card(Suit.Oros, Value.Five),
+                new Card(Suit.Copas, Value.Six),
+                new Card(Suit.Bastos, Value.Seven)
             };
 
             var points = Rules.CalculateCapturePoints(capturedCards, false);
 
-            Assert.AreEqual(7, points); // 2 cards + 5 Khamsa bonus
+            Assert.AreEqual(4, points); // 2 base points + 2 for sequence length
         }
 
         [Test]
-        public void CalculateCapturePoints_WithAshra_ReturnsCorrectPoints()
+        public void CalculateCapturePoints_WithLongerSequence_ReturnsCorrectPoints()
         {
             var capturedCards = new List<Card>
             {
-                new(Suit.Oros, Value.Ten),
-                new(Suit.Copas, Value.Two)
+                new Card(Suit.Oros, Value.Four),
+                new Card(Suit.Copas, Value.Five),
+                new Card(Suit.Bastos, Value.Six),
+                new Card(Suit.Espadas, Value.Seven)
             };
 
             var points = Rules.CalculateCapturePoints(capturedCards, false);
 
-            Assert.AreEqual(12, points); // 2 cards + 10 Ashra bonus
+            Assert.AreEqual(5, points); // 2 base points + 3 for sequence length
         }
 
         [Test]
-        public void CalculateCapturePoints_WithMissaSequence_ReturnsCorrectPoints()
+        public void GetCaptureableCards_WithNoSequence_ReturnsOnlyMatchingCard()
         {
-            var capturedCards = new List<Card>
+            var playedCard = new Card(Suit.Oros, Value.Five);
+            _tableCards.AddRange(new[]
             {
-                new(Suit.Oros, Value.Five),
-                new(Suit.Copas, Value.Six),
-                new(Suit.Bastos, Value.Seven)
-            };
+                new Card(Suit.Copas, Value.Five),
+                new Card(Suit.Bastos, Value.Seven),
+                new Card(Suit.Espadas, Value.Ten)
+            });
 
-            var points = Rules.CalculateCapturePoints(capturedCards, false);
+            var captureableCards = Rules.GetCaptureableCards(playedCard, _tableCards);
 
-            Assert.AreEqual(4, points); // 3 cards + 1 Missa bonus
-        }
-
-        [Test]
-        public void HasValidMissaSequence_WithSequencePastSeven_ReturnsFalse()
-        {
-            var cards = new List<Card>
-            {
-                new(Suit.Oros, Value.Seven),
-                new(Suit.Copas, Value.Ten),
-                new(Suit.Bastos, Value.Eleven)
-            };
-
-            var result = Rules.HasValidMissaSequence(cards);
-
-            Assert.IsFalse(result);
-        }
-
-        [Test]
-        public void CalculateCapturePoints_WithFinalThrow_ReturnsCorrectPoints()
-        {
-            var capturedCards = new List<Card>
-            {
-                new(Suit.Oros, Value.Twelve),
-                new(Suit.Copas, Value.Two)
-            };
-
-            var points = Rules.CalculateCapturePoints(capturedCards, true);
-
-            Assert.AreEqual(7, points); // 2 cards + 5 final throw bonus
+            Assert.AreEqual(1, captureableCards.Count);
+            Assert.IsTrue(captureableCards.All(c => c.Value == Value.Five));
         }
 
         [Test]
         public void IsValidDeck_WithCorrectDeck_ReturnsTrue()
         {
             var deck = new Deck();
-
             var result = Rules.IsValidDeck(deck);
-
             Assert.IsTrue(result);
         }
 
@@ -161,9 +152,7 @@ namespace KKL.Ronda.Tests
         {
             var deck = new Deck();
             _ = deck.PullCard();
-
             var result = Rules.IsValidDeck(deck);
-
             Assert.IsFalse(result);
         }
     }

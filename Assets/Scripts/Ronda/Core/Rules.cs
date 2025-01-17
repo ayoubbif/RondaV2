@@ -7,30 +7,39 @@ namespace KKL.Ronda.Core
     public abstract class Rules
     {
         private const int TotalDeckSize = 40;
-        private const int WahadPoints = 1;
+
+        // Special move point values
+        private const int WahedPoints = 1;
         private const int KhamsaPoints = 5;
         private const int AshraPoints = 10;
         private const int MissaPoints = 1;
         private const int FinalThrowPoints = 5;
 
+        /// <summary>
+        /// Checks if there are any cards on the table that can be captured by the played card.
+        /// </summary>
         public static bool CanCapture(Card playedCard, List<Card> tableCards)
         {
             return tableCards.Any(card => card.Value == playedCard.Value);
         }
 
+        /// <summary>
+        /// Gets all cards that can be captured, including any sequences.
+        /// </summary>
         public static List<Card> GetCaptureableCards(Card playedCard, List<Card> tableCards)
         {
             var captureable = new HashSet<Card>();
+            
+            // Find all matching cards
             var matchingCards = tableCards.Where(card => card.Value == playedCard.Value).ToList();
-
+            
             foreach (var matchingCard in matchingCards)
             {
                 captureable.Add(matchingCard);
                 
-                var forwardSequence = GetConsecutiveSequence(matchingCard, tableCards, true);
-                var backwardSequence = GetConsecutiveSequence(matchingCard, tableCards, false);
-                
-                foreach (var card in forwardSequence.Concat(backwardSequence))
+                // Check for sequences starting from the matching card
+                var sequence = GetSequenceStartingFrom(matchingCard, tableCards);
+                foreach (var card in sequence)
                 {
                     captureable.Add(card);
                 }
@@ -39,46 +48,53 @@ namespace KKL.Ronda.Core
             return captureable.ToList();
         }
 
-        private static List<Card> GetConsecutiveSequence(Card startCard, List<Card> tableCards, bool forward)
+        /// <summary>
+        /// Gets a sequence of cards starting from the given card.
+        /// </summary>
+        private static List<Card> GetSequenceStartingFrom(Card startCard, List<Card> tableCards)
         {
             var sequence = new List<Card>();
-            var currentValue = startCard.Value;
-            var remainingCards = tableCards.Where(c => c != startCard).ToList();
-
-            while (true)
+            var sortedCards = tableCards.OrderBy(x => x.Value).ToList();
+            
+            // Find the index of the starting card in the sorted list
+            for (int i = 0; i < sortedCards.Count; i++)
             {
-                if (currentValue == Value.Seven && forward)
-                    break;
-                
-                if (currentValue == Value.Ten && !forward)
-                    break;
+                if (sortedCards[i].Value != startCard.Value) continue;
 
-                // Convert to byte since Value enum is byte-based
-                var nextValueByte = (byte)((byte)currentValue + (forward ? 1 : -1));
-                
-                // Check if the next value exists in the Value enum
-                if (!Enum.IsDefined(typeof(Value), nextValueByte))
-                    break;
-                
-                var nextValue = (Value)nextValueByte;
-                var nextCard = remainingCards.FirstOrDefault(c => c.Value == nextValue);
-                
-                if (nextCard == null)
-                    break;
-
-                sequence.Add(nextCard);
-                remainingCards.Remove(nextCard);
-                currentValue = nextValue;
+                var j = i;
+                // Look for cards to the right of the played card that continue the sequence
+                while (j < sortedCards.Count - 1 && sortedCards[j + 1].Value == sortedCards[j].Value + 1)
+                {
+                    j++;
+                    sequence.Add(sortedCards[j]);
+                }
+                break;
             }
 
             return sequence;
         }
 
+        /// <summary>
+        /// Calculates points for captured cards including special moves.
+        /// </summary>
         public static int CalculateCapturePoints(List<Card> capturedCards, bool isLastCapture)
         {
-            var points = capturedCards.Count; // Base points
+            int points = 0;
+
+            // Base points for matching cards
+            points += 2; // Points for the basic match
+
+            // Add points for sequence if present
+            int sequenceLength = GetSequenceLength(capturedCards);
+            if (sequenceLength > 0)
+            {
+                points += sequenceLength;
+            }
+
+            // Add special move points
             points += CalculateSpecialMovePoints(capturedCards);
 
+            // Add final throw bonus if applicable
             if (isLastCapture)
             {
                 points += CalculateFinalThrowPoints(capturedCards);
@@ -87,61 +103,94 @@ namespace KKL.Ronda.Core
             return points;
         }
 
-        private static int CalculateSpecialMovePoints(List<Card> cards)
+        /// <summary>
+        /// Calculates points from special moves (Wahed, Khamsa, Ashra, Missa).
+        /// </summary>
+        public static int CalculateSpecialMovePoints(List<Card> capturedCards)
         {
-            var points = 0;
+            int points = 0;
 
-            // Special card bonuses - removed Value.Five for test card
-            if (cards.Any(c => c.Value == Value.One)) points += WahadPoints;
-            if (cards.Any(c => c.Value == Value.Ten)) points += AshraPoints;
-            
-            // Only add Khamsa points if it's not part of a Missa sequence
-            if (cards.Any(c => c.Value == Value.Five) && !HasValidMissaSequence(cards))
+            // Check for Wahed (Capturing with a One)
+            if (capturedCards.Any(c => c.Value == Value.One))
+            {
+                points += WahedPoints;
+            }
+
+            // Check for Khamsa (Capturing with a Five)
+            if (capturedCards.Any(c => c.Value == Value.Five))
             {
                 points += KhamsaPoints;
             }
-            
-            // Sequence bonus
-            if (HasValidMissaSequence(cards)) points += MissaPoints;
+
+            // Check for Ashra (Capturing with a Ten)
+            if (capturedCards.Any(c => c.Value == Value.Ten))
+            {
+                points += AshraPoints;
+            }
+
+            // Check for Missa (Special combination - implementation depends on specific rules)
+            if (IsMissa(capturedCards))
+            {
+                points += MissaPoints;
+            }
 
             return points;
         }
 
-        private static int CalculateFinalThrowPoints(List<Card> cards)
+        /// <summary>
+        /// Calculates bonus points for the final throw of the game.
+        /// </summary>
+        private static int CalculateFinalThrowPoints(List<Card> capturedCards)
         {
-            if (cards.Any(c => c.Value == Value.Twelve || c.Value == Value.One))
+            // Final throw with Rey (12) or As (1) gets bonus points
+            if (capturedCards.Any(c => c.Value == Value.Twelve || c.Value == Value.One))
             {
                 return FinalThrowPoints;
             }
             return 0;
         }
 
-        public static bool HasValidMissaSequence(List<Card> cards)
+        /// <summary>
+        /// Checks if the captured cards form a Missa combination.
+        /// Implementation depends on specific Missa rules.
+        /// </summary>
+        private static bool IsMissa(List<Card> capturedCards)
         {
-            if (cards.Count < 3) return false;
-
-            var orderedCards = cards.OrderBy(c => (byte)c.Value).ToList();
-    
-            for (var i = 0; i < orderedCards.Count - 2; i++)
-            {
-                var current = (byte)orderedCards[i].Value;
-                var next = (byte)orderedCards[i + 1].Value;
-                var nextNext = (byte)orderedCards[i + 2].Value;
-
-                // Check for consecutive sequence
-                if (next == current + 1 && nextNext == next + 1)
-                {
-                    // Don't allow sequences to continue past 7
-                    if (nextNext <= (byte)Value.Seven)
-                    {
-                        return true;
-                    }
-                }
-            }
-
+            // TODO: Implement specific Missa rules based on game requirements
+            // This could involve checking for specific card combinations
             return false;
         }
 
+        /// <summary>
+        /// Gets the length of the longest sequence in the captured cards.
+        /// </summary>
+        private static int GetSequenceLength(List<Card> cards)
+        {
+            if (cards.Count < 2) return 0;
+
+            var sortedCards = cards.OrderBy(x => x.Value).ToList();
+            var maxSequence = 0;
+            var currentSequence = 0;
+
+            for (int i = 0; i < sortedCards.Count - 1; i++)
+            {
+                if (sortedCards[i + 1].Value == sortedCards[i].Value + 1)
+                {
+                    currentSequence++;
+                    maxSequence = Math.Max(maxSequence, currentSequence);
+                }
+                else
+                {
+                    currentSequence = 0;
+                }
+            }
+
+            return maxSequence;
+        }
+
+        /// <summary>
+        /// Validates that the deck contains the correct number and distribution of cards.
+        /// </summary>
         public static bool IsValidDeck(Deck deck)
         {
             var cards = deck.Cards;

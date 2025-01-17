@@ -7,7 +7,7 @@ namespace KKL.Ronda.Core
 {
     public class Table : MonoBehaviour
     {
-        private List<Card> Cards => cards.ToList();
+        public List<Card> Cards => cards.ToList();
         [SerializeField] private List<Card> cards;
 
         public Table(List<Card> cards)

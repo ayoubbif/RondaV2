@@ -73,3 +73,6 @@ crashlytics-build.properties
 
 # JetBrains
 .idea/
+
+# VS Code
+.vscode/
