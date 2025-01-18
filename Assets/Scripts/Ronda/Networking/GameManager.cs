@@ -46,6 +46,18 @@ namespace KKL.Ronda.Networking
         private Action<ulong> _onCardsDealt;
         private bool _isEmptyHanded;
         private bool _canCapture;
+        private const int InitialTableCards = 4;
+        private const int CardsPerDeal = 3;
+        private readonly NetworkVariable<GameState> _currentGameState = new();
+        [SerializeField] public TurnManager turnManager;
+        [SerializeField] private TMP_Text turnIndicatorText;
+        private bool _isGameStarted;
+
+        private enum GameState
+        {
+            Dealing,
+            Playing,
+        }
 
         #endregion
 
@@ -78,21 +90,6 @@ namespace KKL.Ronda.Networking
             }
         }
 
-        #endregion
-        
-        #region Game State
-        private const int InitialTableCards = 4;
-        private const int CardsPerDeal = 3;
-        private readonly NetworkVariable<GameState> _currentGameState = new();
-        [SerializeField] public TurnManager turnManager;
-        [SerializeField] private TMP_Text turnIndicatorText;
-        private bool _isGameStarted;
-
-        private enum GameState
-        {
-            Dealing,
-            Playing,
-        }
         #endregion
 
         #region Server Logic
@@ -229,38 +226,16 @@ namespace KKL.Ronda.Networking
             StartCoroutine(DealAfterDelay(2f));
         }
 
-        #endregion
-        
-        #region Special Moves Handling
-
-        /// <summary>
-        /// Handles special move scoring and effects
-        /// </summary>
-        private void HandleSpecialMoves(Card playedCard, Player player, List<Card> capturedCards)
-        {
-            var specialMovePoints = Rules.CalculateSpecialMovePoints(capturedCards);
-            if (specialMovePoints > 0)
-            {
-                player.AddScore((uint)specialMovePoints);
-                NotifySpecialMoveClientRpc(player.OwnerClientId, playedCard, specialMovePoints);
-            }
-        }
-
         /// <summary>
         /// Handles the capture logic when a card is played that can capture cards from the table.
         /// </summary>
         private void HandleCardCapture(Card playedCard, Player player)
         {
-            var captureableCards = Rules.GetCaptureableCards(playedCard, table.Cards);
+            var captureableCards = Rules.GetMandatoryCaptureCards(playedCard, table.Cards);
             
             if (captureableCards.Any())
             {
-                // Check if this is the last capture of the game
-                bool isLastCapture = _deck.Cards.Count == 0 && players.All(p => p.CardsInHand.Count == 0);
-                int capturePoints = Rules.CalculateCapturePoints(captureableCards, isLastCapture);
-                
-                // Handle special moves
-                HandleSpecialMoves(playedCard, player, captureableCards);
+                int capturePoints = captureableCards.Count;
                 
                 // Award capture points to the player
                 player.AddScore((uint)capturePoints);
@@ -270,6 +245,7 @@ namespace KKL.Ronda.Networking
                 UpdateScoreClientRpc(player.OwnerClientId, player.Score);
             }
         }
+        
         #endregion
 
         #region ClientRPC Methods
@@ -376,16 +352,6 @@ namespace KKL.Ronda.Networking
                 table.AddCardToTable(card);
                 SpawnCardOnTable(card);
             }
-        }
-
-        [ClientRpc]
-        private void NotifySpecialMoveClientRpc(ulong playerId, Card playedCard, int points)
-        {
-            // Show special move animation or effect
-            Debug.Log($"Special Move! Player {playerId} scored {points} points with {playedCard}");
-            
-            // You could trigger UI animations or effects here
-            ShowSpecialMoveEffect(playedCard, points);
         }
 
         [ClientRpc]
@@ -557,19 +523,6 @@ namespace KKL.Ronda.Networking
             S_Deal();
         }
 
-        #endregion
-        
-        #region UI Effects
-
-        /// <summary>
-        /// Shows visual effects for special moves
-        /// </summary>
-        private void ShowSpecialMoveEffect(Card card, int points)
-        {
-            // Implementation would depend on your UI setup
-            // Could show particles, animations, or temporary text
-            Debug.Log($"Special move effect: {card} for {points} points!");
-        }
         #endregion
     }
 }

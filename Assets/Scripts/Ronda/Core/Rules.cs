@@ -7,45 +7,113 @@ namespace KKL.Ronda.Core
     public abstract class Rules
     {
         private const int TotalDeckSize = 40;
+        private const int FirstCapturePoints = 1;
+        private const int SecondCapturePoints = 5;
+        private const int ThirdCapturePoints = 10;
+        private const int WinningScore = 41;
+        private const int ExtraCardPoint = 1;
+        private const int MaxExtraCardPoints = 20;
 
-        // Special move point values
-        private const int WahedPoints = 1;
-        private const int KhamsaPoints = 5;
-        private const int AshraPoints = 10;
-        private const int MissaPoints = 1;
-        private const int FinalThrowPoints = 5;
+        /// <summary>
+        /// Validates initial table cards according to game rules.
+        /// </summary>
+        public static bool AreValidTableCards(List<Card> tableCards)
+        {
+            if (tableCards == null || tableCards.Count != 4)
+                return false;
+
+            // Check for pairs
+            var hasPairs = tableCards.GroupBy(c => c.Value)
+                                   .Any(g => g.Count() > 1);
+            if (hasPairs) 
+                return false;
+
+            // Check for sequences
+            var sortedValues = tableCards.Select(c => (int)c.Value)
+                                       .OrderBy(v => v)
+                                       .ToList();
+            for (int i = 0; i < sortedValues.Count - 1; i++)
+            {
+                if (sortedValues[i + 1] == sortedValues[i] + 1)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a player has a Ronda (pair) in their hand.
+        /// </summary>
+        public static bool HasRonda(List<Card> handCards)
+        {
+            if (handCards == null) 
+                return false;
+
+            return handCards.GroupBy(c => c.Value)
+                          .Any(g => g.Count() == 2);
+        }
+
+        /// <summary>
+        /// Checks if a player has a Tringa (three of a kind) in their hand.
+        /// </summary>
+        public static bool HasTringa(List<Card> handCards)
+        {
+            if (handCards == null) 
+                return false;
+
+            return handCards.GroupBy(c => c.Value)
+                          .Any(g => g.Count() == 3);
+        }
+
+        /// <summary>
+        /// Gets the value of the highest Ronda in case of multiple announcements.
+        /// </summary>
+        public static Value GetHighestRondaValue(List<Card> handCards)
+        {
+            if (handCards == null || !HasRonda(handCards))
+                throw new InvalidOperationException("No Ronda found in hand");
+
+            return handCards.GroupBy(c => c.Value)
+                          .Where(g => g.Count() == 2)
+                          .Select(g => g.Key)
+                          .Max();
+        }
 
         /// <summary>
         /// Checks if there are any cards on the table that can be captured by the played card.
         /// </summary>
         public static bool CanCapture(Card playedCard, List<Card> tableCards)
         {
+            if (playedCard == null || tableCards == null)
+                return false;
+
             return tableCards.Any(card => card.Value == playedCard.Value);
         }
 
         /// <summary>
-        /// Gets all cards that can be captured, including any sequences.
+        /// Gets all cards that must be captured according to game rules.
+        /// Players must capture all possible cards including sequences.
         /// </summary>
-        public static List<Card> GetCaptureableCards(Card playedCard, List<Card> tableCards)
+        public static List<Card> GetMandatoryCaptureCards(Card playedCard, List<Card> tableCards)
         {
-            var captureable = new HashSet<Card>();
-            
+            if (playedCard == null || tableCards == null)
+                return new List<Card>();
+
+            var capturable = new List<Card> { playedCard };
+
             // Find all matching cards
             var matchingCards = tableCards.Where(card => card.Value == playedCard.Value).ToList();
             
             foreach (var matchingCard in matchingCards)
             {
-                captureable.Add(matchingCard);
+                capturable.Add(matchingCard);
                 
                 // Check for sequences starting from the matching card
                 var sequence = GetSequenceStartingFrom(matchingCard, tableCards);
-                foreach (var card in sequence)
-                {
-                    captureable.Add(card);
-                }
+                capturable.AddRange(sequence);
             }
 
-            return captureable.ToList();
+            return capturable.Distinct().ToList();
         }
 
         /// <summary>
@@ -54,138 +122,54 @@ namespace KKL.Ronda.Core
         private static List<Card> GetSequenceStartingFrom(Card startCard, List<Card> tableCards)
         {
             var sequence = new List<Card>();
-            var sortedCards = tableCards.OrderBy(x => x.Value).ToList();
+            var currentValue = (int)startCard.Value;
             
-            // Find the index of the starting card in the sorted list
-            for (int i = 0; i < sortedCards.Count; i++)
+            while (true)
             {
-                if (sortedCards[i].Value != startCard.Value) continue;
-
-                var j = i;
-                // Look for cards to the right of the played card that continue the sequence
-                while (j < sortedCards.Count - 1 && sortedCards[j + 1].Value == sortedCards[j].Value + 1)
-                {
-                    j++;
-                    sequence.Add(sortedCards[j]);
-                }
-                break;
+                var nextCard = tableCards.FirstOrDefault(c => (int)c.Value == currentValue + 1);
+                if (nextCard == null)
+                    break;
+                
+                sequence.Add(nextCard);
+                currentValue = (int)nextCard.Value;
             }
 
             return sequence;
         }
 
         /// <summary>
-        /// Calculates points for captured cards including special moves.
+        /// Calculates points for captured cards based on consecutive captures.
         /// </summary>
-        public static int CalculateCapturePoints(List<Card> capturedCards, bool isLastCapture)
+        public static int CalculateCapturePoints(int consecutiveCaptureCount)
         {
-            int points = 0;
-
-            // Base points for matching cards
-            points += 2; // Points for the basic match
-
-            // Add points for sequence if present
-            int sequenceLength = GetSequenceLength(capturedCards);
-            if (sequenceLength > 0)
+            return consecutiveCaptureCount switch
             {
-                points += sequenceLength;
-            }
-
-            // Add special move points
-            points += CalculateSpecialMovePoints(capturedCards);
-
-            // Add final throw bonus if applicable
-            if (isLastCapture)
-            {
-                points += CalculateFinalThrowPoints(capturedCards);
-            }
-
-            return points;
+                1 => FirstCapturePoints,
+                2 => SecondCapturePoints,
+                3 => ThirdCapturePoints,
+                _ => 0
+            };
         }
 
         /// <summary>
-        /// Calculates points from special moves (Wahed, Khamsa, Ashra, Missa).
+        /// Calculates end-game points based on number of captured cards.
         /// </summary>
-        public static int CalculateSpecialMovePoints(List<Card> capturedCards)
+        public static int CalculateExtraCardPoints(int playerCardCount, int opponentCardCount)
         {
-            int points = 0;
-
-            // Check for Wahed (Capturing with a One)
-            if (capturedCards.Any(c => c.Value == Value.One))
-            {
-                points += WahedPoints;
-            }
-
-            // Check for Khamsa (Capturing with a Five)
-            if (capturedCards.Any(c => c.Value == Value.Five))
-            {
-                points += KhamsaPoints;
-            }
-
-            // Check for Ashra (Capturing with a Ten)
-            if (capturedCards.Any(c => c.Value == Value.Ten))
-            {
-                points += AshraPoints;
-            }
-
-            // Check for Missa (Special combination - implementation depends on specific rules)
-            if (IsMissa(capturedCards))
-            {
-                points += MissaPoints;
-            }
-
-            return points;
+            if (playerCardCount <= opponentCardCount)
+                return 0;
+            
+            var extraCards = playerCardCount - opponentCardCount;
+            var points = extraCards * ExtraCardPoint;
+            return Math.Min(points, MaxExtraCardPoints);
         }
 
         /// <summary>
-        /// Calculates bonus points for the final throw of the game.
+        /// Checks if the game should end (reaching winning score).
         /// </summary>
-        private static int CalculateFinalThrowPoints(List<Card> capturedCards)
+        public static bool IsGameOver(int playerScore)
         {
-            // Final throw with Rey (12) or As (1) gets bonus points
-            if (capturedCards.Any(c => c.Value == Value.Twelve || c.Value == Value.One))
-            {
-                return FinalThrowPoints;
-            }
-            return 0;
-        }
-
-        /// <summary>
-        /// Checks if the captured cards form a Missa combination.
-        /// Implementation depends on specific Missa rules.
-        /// </summary>
-        private static bool IsMissa(List<Card> capturedCards)
-        {
-            // TODO: Implement specific Missa rules based on game requirements
-            // This could involve checking for specific card combinations
-            return false;
-        }
-
-        /// <summary>
-        /// Gets the length of the longest sequence in the captured cards.
-        /// </summary>
-        private static int GetSequenceLength(List<Card> cards)
-        {
-            if (cards.Count < 2) return 0;
-
-            var sortedCards = cards.OrderBy(x => x.Value).ToList();
-            var maxSequence = 0;
-            var currentSequence = 0;
-
-            for (int i = 0; i < sortedCards.Count - 1; i++)
-            {
-                if (sortedCards[i + 1].Value == sortedCards[i].Value + 1)
-                {
-                    currentSequence++;
-                    maxSequence = Math.Max(maxSequence, currentSequence);
-                }
-                else
-                {
-                    currentSequence = 0;
-                }
-            }
-
-            return maxSequence;
+            return playerScore >= WinningScore;
         }
 
         /// <summary>
@@ -193,11 +177,12 @@ namespace KKL.Ronda.Core
         /// </summary>
         public static bool IsValidDeck(Deck deck)
         {
-            var cards = deck.Cards;
-            
-            if (cards.Count != TotalDeckSize)
+            if (deck?.Cards == null || deck.Cards.Count != TotalDeckSize)
                 return false;
 
+            var cards = deck.Cards;
+            
+            // Check for exactly one of each card
             foreach (Suit suit in Enum.GetValues(typeof(Suit)))
             {
                 foreach (Value value in Enum.GetValues(typeof(Value)))
