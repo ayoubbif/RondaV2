@@ -173,10 +173,7 @@ namespace KKL.Ronda.Core
 
             SetCardParentAndPosition(table);
             _card = CardConverter.GetCardValueFromGameObject(gameObject);
-        
-            // Log the play attempt
-            Debug.Log($"Player {localPlayerId} attempting to play card {_card}");
-        
+            
             GameManager.OnCardPlayedServerRpc(CardConverter.GetCodedCard(_card), localPlayerId);
         }
 

@@ -29,19 +29,6 @@ namespace KKL.Ronda.Networking
         [SerializeField] private TMP_Text turnIndicatorText;
         [SerializeField] private TMP_Text timerText;
         
-        public ulong CurrentPlayerId => CurrentPlayerTurnId.Value;
-        
-
-        // Add verification method
-        public bool VerifyTurnChange(ulong oldPlayerId, ulong newPlayerId)
-        {
-            if (!_isTurnActive.Value) return false;
-            if (CurrentPlayerTurnId.Value != newPlayerId) return false;
-        
-            Debug.Log($"Turn change verified: {oldPlayerId} -> {newPlayerId}");
-            return true;
-        }
-        
         private void Update()
         {
             if (IsServer && _isTurnActive.Value)
@@ -122,7 +109,7 @@ namespace KKL.Ronda.Networking
         {
             if (timerText != null)
             {
-                timerText.text = $"Time: {Mathf.CeilToInt(_turnTimeRemaining.Value)}s";
+                timerText.text = $"{Mathf.CeilToInt(_turnTimeRemaining.Value)}";
                 timerText.color = _turnTimeRemaining.Value <= TurnWarningTime ? Color.red : Color.white;
             }
         }
@@ -133,7 +120,7 @@ namespace KKL.Ronda.Networking
             if (turnIndicatorText != null)
             {
                 bool isLocalPlayerTurn = currentPlayerId == NetworkManager.LocalClientId;
-                turnIndicatorText.text = isLocalPlayerTurn ? "Your Turn" : "Opponent's Turn";
+                turnIndicatorText.text = isLocalPlayerTurn ? "You" : "Opponent";
                 turnIndicatorText.color = isLocalPlayerTurn ? Color.green : Color.red;
             }
         }

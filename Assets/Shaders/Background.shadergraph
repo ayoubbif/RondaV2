@@ -494,7 +494,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Strength",
     "m_StageCapability": 3,
-    "m_Value": 30.0,
+    "m_Value": 33.0,
     "m_DefaultValue": 10.0,
     "m_Labels": []
 }
@@ -713,7 +713,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Scale",
     "m_StageCapability": 3,
-    "m_Value": 52.79999923706055,
+    "m_Value": 33.0,
     "m_DefaultValue": 500.0,
     "m_Labels": []
 }
@@ -832,7 +832,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Scale",
     "m_StageCapability": 3,
-    "m_Value": 16.200000762939454,
+    "m_Value": 19.0,
     "m_DefaultValue": 500.0,
     "m_Labels": []
 }
@@ -848,7 +848,7 @@
     "m_ShaderOutputName": "Steps",
     "m_StageCapability": 3,
     "m_Value": {
-        "x": 2.0999999046325685,
+        "x": 3.299999952316284,
         "y": 4.0,
         "z": 4.0,
         "w": 4.0
@@ -871,7 +871,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Scale",
     "m_StageCapability": 3,
-    "m_Value": 31.299999237060548,
+    "m_Value": 33.0,
     "m_DefaultValue": 500.0,
     "m_Labels": []
 }
@@ -1737,7 +1737,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Opacity",
     "m_StageCapability": 3,
-    "m_Value": 0.05000000074505806,
+    "m_Value": 0.07000000029802323,
     "m_DefaultValue": 1.0,
     "m_Labels": []
 }
@@ -2700,7 +2700,7 @@
     "m_ShaderOutputName": "B",
     "m_StageCapability": 3,
     "m_Value": {
-        "x": 2.140000104904175,
+        "x": 2.0,
         "y": 2.0,
         "z": 2.0,
         "w": 2.0
