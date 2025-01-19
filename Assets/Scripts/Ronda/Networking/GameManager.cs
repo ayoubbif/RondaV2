@@ -104,7 +104,7 @@ namespace KKL.Ronda.Networking
 
             List<Card> initialTableCards;
             bool isValid;
-            int maxAttempts = 10;
+            int maxAttempts = 69;
             int attempts = 0;
 
             do

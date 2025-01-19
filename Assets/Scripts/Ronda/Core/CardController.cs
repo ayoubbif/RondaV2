@@ -3,12 +3,11 @@ using KKL.Ronda.Networking;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using TMPro;
 using Random = UnityEngine.Random;
 
 namespace KKL.Ronda.Core
 {
-    public class CardController : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler
+    public class CardController : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IDragHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private Image _cardImage;
         private Transform _parent;
@@ -16,52 +15,48 @@ namespace KKL.Ronda.Core
         private Card _card;
         private bool _isDragging;
         private bool _isPlayerCard;
+        private Outline _outline;
         
         [SerializeField] private float invalidMoveShakeDuration = 0.5f;
         [SerializeField] private float invalidMoveShakeIntensity = 10f;
+        [SerializeField] private Color hoverOutlineColor = new(1f, 0.92f, 0.016f, 1f); // Golden yellow
+        [SerializeField] private Color dragColor = new(1f, 1f, 1f, 0.8f); // Slightly transparent white
+        
+        private Color _originalCardColor;
         
         private static GameManager GameManager => GameManager.Instance;
         private TurnManager TurnManager => GameManager.turnManager;
-        
-        // Feedback UI - Only for player cards
-        private TMP_Text _feedbackText;
-        private readonly float _feedbackDisplayTime = 2f;
         private float _feedbackTimer;
 
         private void Awake()
         {
             try
             {
+                // Get required components
                 _cardImage = GetComponent<Image>();
+                _outline = GetComponent<Outline>();
+                
                 if (_cardImage == null)
                 {
                     Debug.LogError("Card Image component not found!");
                     return;
                 }
 
+                // Store original color
+                _originalCardColor = _cardImage.color;
+                
+                // Configure outline
+                if (_outline != null)
+                {
+                    _outline.enabled = false;
+                    _outline.effectColor = hoverOutlineColor;
+                    _outline.effectDistance = new Vector2(2, -2);
+                }
+
                 _parent = transform.parent;
         
                 // Determine if this is a player card - add null check
                 _isPlayerCard = _parent != null && _parent.name == "PlayerHand";
-        
-                // Initialize feedback UI
-                if (_isPlayerCard)
-                {
-                    InitializeFeedbackUI();
-            
-                    // Only subscribe to turn events if TurnManager exists
-                    if (GameManager.Instance != null && GameManager.Instance.turnManager != null)
-                    {
-                        var turnManager = GameManager.Instance.turnManager;
-                        turnManager.OnTurnChanged += HandleTurnChanged;
-                        turnManager.OnTurnWarning += HandleTurnWarning;
-                        turnManager.OnTurnTimeout += HandleTurnTimeout;
-                    }
-                    else
-                    {
-                        Debug.LogWarning("TurnManager not found during CardController initialization");
-                    }
-                }
             }
             catch (Exception e)
             {
@@ -69,21 +64,35 @@ namespace KKL.Ronda.Core
             }
         }
 
-        private void OnDestroy()
+        public void OnPointerEnter(PointerEventData eventData)
         {
-            if (_isPlayerCard && TurnManager != null)
+            if (_isPlayerCard && !_isDragging && TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
             {
-                TurnManager.OnTurnChanged -= HandleTurnChanged;
-                TurnManager.OnTurnWarning -= HandleTurnWarning;
-                TurnManager.OnTurnTimeout -= HandleTurnTimeout;
+                EnableOutline();
             }
         }
 
-        private void Update()
+        public void OnPointerExit(PointerEventData eventData)
         {
-            if (_isPlayerCard)
+            if (!_isDragging)
             {
-                UpdateFeedbackUI();
+                DisableOutline();
+            }
+        }
+
+        private void EnableOutline()
+        {
+            if (_outline != null)
+            {
+                _outline.enabled = true;
+            }
+        }
+
+        private void DisableOutline()
+        {
+            if (_outline != null)
+            {
+                _outline.enabled = false;
             }
         }
 
@@ -100,6 +109,10 @@ namespace KKL.Ronda.Core
             
             _isDragging = true;
             SetCardDragProperties();
+            
+            // Apply drag visual effects
+            _cardImage.color = dragColor;
+            DisableOutline();
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -117,6 +130,10 @@ namespace KKL.Ronda.Core
                 
             _isDragging = false;
             _cardImage.raycastTarget = true;
+            
+            // Reset visual effects
+            _cardImage.color = _originalCardColor;
+            
             AnalyzePointerUp(eventData);
         }
 
@@ -144,6 +161,7 @@ namespace KKL.Ronda.Core
             if (IsPointerReleasedOnTable(eventData))
             {
                 PlayCardOnTable(eventData.pointerEnter.transform);
+                DisableOutline();
             }
             else
             {
@@ -191,67 +209,12 @@ namespace KKL.Ronda.Core
 
         #region Visual Feedback
         
-        private void InitializeFeedbackUI()
-        {
-            if (!_isPlayerCard) return; // Skip if not a player card
-    
-            try 
-            {
-                // Create feedback text if needed
-                if (_feedbackText == null)
-                {
-                    var feedbackObj = new GameObject("CardFeedback");
-                    feedbackObj.transform.SetParent(transform);
-            
-                    // Set the local position to zero
-                    feedbackObj.transform.localPosition = Vector3.zero;
-            
-                    _feedbackText = feedbackObj.AddComponent<TextMeshProUGUI>(); // Note: Changed to TextMeshProUGUI
-                    if (_feedbackText != null)
-                    {
-                        _feedbackText.fontSize = 14;
-                        _feedbackText.alignment = TextAlignmentOptions.Center;
-                        // Set additional properties
-                        _feedbackText.color = Color.white;
-                        _feedbackText.raycastTarget = false;
-                        _feedbackText.gameObject.SetActive(false);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"Error initializing feedback UI: {e.Message}");
-            }
-        }
-
-        private void UpdateFeedbackUI()
-        {
-            if (_feedbackText == null || !_feedbackText.gameObject.activeSelf)
-                return;
-
-            _feedbackTimer -= Time.deltaTime;
-            if (_feedbackTimer <= 0)
-            {
-                _feedbackText.gameObject.SetActive(false);
-            }
-        }
 
         private void ShowInvalidMoveMessage()
         {
             if (_isPlayerCard && !TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
             {
-                ShowFeedback("Not your turn!");
                 StartCoroutine(ShakeCard());
-            }
-        }
-
-        private void ShowFeedback(string message)
-        {
-            if (_feedbackText != null)
-            {
-                _feedbackText.text = message;
-                _feedbackText.gameObject.SetActive(true);
-                _feedbackTimer = _feedbackDisplayTime;
             }
         }
 
@@ -272,34 +235,6 @@ namespace KKL.Ronda.Core
             }
 
             transform.localPosition = originalPosition;
-        }
-        
-        #endregion
-
-        #region Turn Management Events
-        
-        private void HandleTurnChanged(ulong playerId)
-        {
-            if (_isPlayerCard && playerId == GameManager.LocalPlayer.OwnerClientId)
-            {
-                ShowFeedback("Your Turn!");
-            }
-        }
-
-        private void HandleTurnWarning()
-        {
-            if (_isPlayerCard && TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
-            {
-                ShowFeedback("Time running out!");
-            }
-        }
-
-        private void HandleTurnTimeout()
-        {
-            if (_isPlayerCard && TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
-            {
-                ShowFeedback("Turn timed out!");
-            }
         }
         
         #endregion
