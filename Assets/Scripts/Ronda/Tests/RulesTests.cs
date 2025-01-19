@@ -173,6 +173,28 @@ namespace KKL.Ronda.Tests
             // Assert
             Assert.That(result, Is.EqualTo(Value.Seven));
         }
+        
+        [Test]
+        public void GetHighestTringaValue_MultipleTringas_ReturnsHighestValue()
+        {
+            // Arrange
+            var handCards = new List<Card>
+            {
+                new(Suit.Copas, Value.One),
+                new(Suit.Oros, Value.One),
+                new(Suit.Bastos, Value.One),
+                new(Suit.Copas, Value.Six),
+                new(Suit.Oros, Value.Six),
+                new(Suit.Bastos, Value.Six)
+            };
+
+            // Act
+            var result = Rules.GetHighestTringaValue(handCards);
+
+            // Assert
+            Assert.That(result, Is.EqualTo(Value.Six));
+        }
+
 
         [Test]
         public void CanCapture_MatchingCard_ReturnsTrue()
@@ -249,17 +271,7 @@ namespace KKL.Ronda.Tests
             Assert.That(result.Select(c => c.Value), Is.EquivalentTo(new[] 
                 { Value.One, Value.One, Value.Two, Value.Three }));
         }
-
-        [Test]
-        public void CalculateCapturePoints_ValidConsecutiveCaptures_ReturnsCorrectPoints()
-        {
-            // Act & Assert
-            Assert.That(Rules.CalculateCapturePoints(1), Is.EqualTo(1));
-            Assert.That(Rules.CalculateCapturePoints(2), Is.EqualTo(5));
-            Assert.That(Rules.CalculateCapturePoints(3), Is.EqualTo(10));
-            Assert.That(Rules.CalculateCapturePoints(4), Is.EqualTo(0));
-        }
-
+        
         [Test]
         public void CalculateExtraCardPoints_MoreCards_ReturnsCorrectPoints()
         {

@@ -7,9 +7,6 @@ namespace KKL.Ronda.Core
     public abstract class Rules
     {
         private const int TotalDeckSize = 40;
-        private const int FirstCapturePoints = 1;
-        private const int SecondCapturePoints = 5;
-        private const int ThirdCapturePoints = 10;
         private const int WinningScore = 41;
         private const int ExtraCardPoint = 1;
         private const int MaxExtraCardPoints = 20;
@@ -78,6 +75,20 @@ namespace KKL.Ronda.Core
                           .Select(g => g.Key)
                           .Max();
         }
+        
+        /// <summary>
+        /// Gets the value of the highest Tringa in case of multiple announcements.
+        /// </summary>
+        public static Value GetHighestTringaValue(List<Card> handCards)
+        {
+            if (handCards == null || !HasTringa(handCards))
+                throw new InvalidOperationException("No Tringa found in hand");
+
+            return handCards.GroupBy(c => c.Value)
+                .Where(g => g.Count() == 2)
+                .Select(g => g.Key)
+                .Max();
+        }
 
         /// <summary>
         /// Checks if there are any cards on the table that can be captured by the played card.
@@ -135,20 +146,6 @@ namespace KKL.Ronda.Core
             }
 
             return sequence;
-        }
-
-        /// <summary>
-        /// Calculates points for captured cards based on consecutive captures.
-        /// </summary>
-        public static int CalculateCapturePoints(int consecutiveCaptureCount)
-        {
-            return consecutiveCaptureCount switch
-            {
-                1 => FirstCapturePoints,
-                2 => SecondCapturePoints,
-                3 => ThirdCapturePoints,
-                _ => 0
-            };
         }
 
         /// <summary>

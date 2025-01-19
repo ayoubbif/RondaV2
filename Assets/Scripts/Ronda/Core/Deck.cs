@@ -57,7 +57,7 @@ namespace KKL.Ronda.Core
             }
         }
 
-        private void ShuffleDeck()
+        public void ShuffleDeck()
         {
             // Use a single Random instance to avoid potential issues with seeding.
             var random = new Random();

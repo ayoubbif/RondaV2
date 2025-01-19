@@ -28,7 +28,7 @@ namespace KKL.Ronda.Networking
         private const int MaxNumPlayers = 2;
         
         // Player Management
-        public List<Player> Players => players.ToList();
+        private List<Player> Players => players.ToList();
         [SerializeField] private List<Player> players = new();
         public Player LocalPlayer => GetLocalPlayer();
     
@@ -48,6 +48,11 @@ namespace KKL.Ronda.Networking
         private bool _isFirstDeal = true;
         [SerializeField] public TurnManager turnManager;
         [SerializeField] private TMP_Text turnIndicatorText;
+        [SerializeField] private TMP_Text announcementText;
+        [SerializeField] private float specialAnnouncementDelay = 2f;
+        private readonly NetworkVariable<bool> _hasAnnouncedRonda = new();
+        private readonly NetworkVariable<bool> _hasAnnouncedTringa = new();
+
         private enum GameState
         {
             Dealing,
@@ -63,6 +68,8 @@ namespace KKL.Ronda.Networking
             // Subscribe to card dealing events
             _onCardsDealt += SpawnCardsClientRpc;
             _onCardsDealt += SpawnEnemyClientRpc;
+            
+            _isEmptyHanded.OnValueChanged += OnEmptyHandedChanged;
         }
     
         private void OnDisable()
@@ -70,6 +77,8 @@ namespace KKL.Ronda.Networking
             // Unsubscribe from card dealing events
             _onCardsDealt -= SpawnCardsClientRpc;
             _onCardsDealt -= SpawnEnemyClientRpc;
+            
+            _isEmptyHanded.OnValueChanged -= OnEmptyHandedChanged;
         }
 
         private void Awake()
@@ -78,23 +87,65 @@ namespace KKL.Ronda.Networking
             {
                 Instance = this;
                 turnManager.Initialize();
-                _isEmptyHanded.OnValueChanged += OnEmptyHandedChanged;
             }
             else
             {
                 Destroy(gameObject);
             }
         }
-        
-        private new void OnDestroy()
-        {
-            _isEmptyHanded.OnValueChanged -= OnEmptyHandedChanged;
-        }
 
         #endregion
 
         #region Server Logic
         
+        private List<Card> DealInitialTableCards()
+        {
+            if (!IsServer) return null;
+
+            List<Card> initialTableCards;
+            bool isValid;
+            int maxAttempts = 10;
+            int attempts = 0;
+
+            do
+            {
+                // Verify deck is valid before attempting to deal
+                if (attempts > 0 && !Rules.IsValidDeck(_deck))
+                {
+                    _deck = new Deck();
+                }
+
+                // Create a deep copy of the full deck before dealing
+                var deckBackup = new Deck();
+                deckBackup.Cards.Clear();
+                foreach (var card in _deck.Cards)
+                {
+                    deckBackup.Cards.Add(new Card(card.Suit, card.Value));
+                }
+
+                // Deal initial cards
+                initialTableCards = new List<Card>();
+                for (int i = 0; i < InitialTableCards; i++)
+                {
+                    initialTableCards.Add(_deck.PullCard());
+                }
+
+                isValid = Rules.AreValidTableCards(initialTableCards);
+
+                // If invalid, restore deck from backup and try again
+                if (!isValid && attempts < maxAttempts - 1)
+                {
+                    _deck = deckBackup;
+                    _deck.ShuffleDeck();
+                    initialTableCards.Clear();
+                }
+
+                attempts++;
+
+            } while (!isValid && attempts < maxAttempts);
+
+            return isValid ? initialTableCards : null;
+        }
         private void S_Deal()
         {
             if (!IsServer || Players.Count < MaxNumPlayers)
@@ -109,13 +160,13 @@ namespace KKL.Ronda.Networking
                 _deck = new Deck();
                 _isDeckInitialized = true;
                 
-                // Deal initial table cards
-                List<Card> initialTableCards = new();
-                for (int i = 0; i < InitialTableCards; i++)
+                List<Card> initialTableCards = DealInitialTableCards();
+                if (initialTableCards == null || initialTableCards.Count != InitialTableCards)
                 {
-                    initialTableCards.Add(_deck.PullCard());
+                    Debug.LogError("Failed to deal valid initial table cards");
+                    return;
                 }
-                
+
                 // Send initial table cards to clients
                 InitializeTableCardsClientRpc(initialTableCards.ToArray());
             }
@@ -136,11 +187,11 @@ namespace KKL.Ronda.Networking
                 _isFirstDeal = false;
             }
         }
-
         private void DealFromDeck()
         {
             _numCardsToDeal = _deck.Cards.Count <= CardsPerDeal * 2 ? _deck.Cards.Count / 2 : CardsPerDeal;
 
+            ResetSpecialCombinations();
             foreach (var player in players)
             {
                 player.InitializeCards(_numCardsToDeal);
@@ -156,6 +207,7 @@ namespace KKL.Ronda.Networking
                 
                 player.Cards = dealtCards.ToArray();
                 SetPlayersCardsClientRpc(player.OwnerClientId, player.Cards);
+                CheckForSpecialCombinations(player, dealtCards);
             }
         }
 
@@ -191,6 +243,34 @@ namespace KKL.Ronda.Networking
         #endregion
 
         #region Game Logic
+        private void CheckForSpecialCombinations(Player player, List<Card> cards)
+        {
+            if (!IsServer) return;
+
+            bool hasRonda = Rules.HasRonda(cards);
+            bool hasTringa = Rules.HasTringa(cards);
+
+            if (hasTringa && !_hasAnnouncedTringa.Value)
+            {
+                Value tringaValue = Rules.GetHighestTringaValue(cards);
+                AnnounceSpecialCombinationClientRpc(player.OwnerClientId, "Tringa", (int)tringaValue);
+                _hasAnnouncedTringa.Value = true;
+        
+                // Award points for Tringa
+                player.AddScore(5); 
+                UpdateScoreClientRpc(player.OwnerClientId, player.Score);
+            }
+            else if (hasRonda && !_hasAnnouncedRonda.Value)
+            {
+                Value rondaValue = Rules.GetHighestRondaValue(cards);
+                AnnounceSpecialCombinationClientRpc(player.OwnerClientId, "Ronda", (int)rondaValue);
+                _hasAnnouncedRonda.Value = true;
+        
+                // Award points for Ronda
+                player.AddScore(1); 
+                UpdateScoreClientRpc(player.OwnerClientId, player.Score);
+            }
+        }
         private void ProcessPlayedCard(Card playedCard, Player player)
         {
             _canCapture = Rules.CanCapture(playedCard, table.Cards);
@@ -277,6 +357,12 @@ namespace KKL.Ronda.Networking
                 // Notify server about cards being added
                 NotifyCardsAddedServerRpc();
             }
+        }
+        
+        [ClientRpc]
+        private void AnnounceSpecialCombinationClientRpc(ulong playerId, string combinationType, int value)
+        {
+            StartCoroutine(ShowSpecialCombinationAnnouncement(playerId, combinationType, value));
         }
 
         [ClientRpc]
@@ -504,6 +590,31 @@ namespace KKL.Ronda.Networking
             }
             
             SpriteConverter.UpdateEnemyCardImages(LocalPlayer.Cards, cardPrefab, enemyHand);
+        }
+        
+        private IEnumerator ShowSpecialCombinationAnnouncement(ulong playerId, string combinationType, int value)
+        {
+            // Here you would show a UI element announcing the special combination
+            string playerName = playerId == NetworkManager.Singleton.LocalClientId ? "You" : "Opponent";
+            string announcement = $"{playerName} announced {combinationType} of {value}s!";
+    
+            // Assuming you have a UI text element for announcements
+            if (announcementText)
+            {
+                string originalText = announcementText.text;
+                announcementText.text = announcement;
+        
+                yield return new WaitForSeconds(specialAnnouncementDelay);
+        
+                announcementText.text = originalText;
+            }
+        }
+
+        private void ResetSpecialCombinations()
+        {
+            if (!IsServer) return;
+            _hasAnnouncedRonda.Value = false;
+            _hasAnnouncedTringa.Value = false;
         }
 
         /// <summary>
