@@ -713,7 +713,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Scale",
     "m_StageCapability": 3,
-    "m_Value": 33.0,
+    "m_Value": 34.0,
     "m_DefaultValue": 500.0,
     "m_Labels": []
 }
@@ -848,7 +848,7 @@
     "m_ShaderOutputName": "Steps",
     "m_StageCapability": 3,
     "m_Value": {
-        "x": 3.299999952316284,
+        "x": 1.600000023841858,
         "y": 4.0,
         "z": 4.0,
         "w": 4.0
@@ -1737,7 +1737,7 @@
     "m_Hidden": false,
     "m_ShaderOutputName": "Opacity",
     "m_StageCapability": 3,
-    "m_Value": 0.07000000029802323,
+    "m_Value": 0.09000000357627869,
     "m_DefaultValue": 1.0,
     "m_Labels": []
 }
@@ -1754,10 +1754,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -1286.5,
-            "y": 647.5,
-            "width": 146.5,
-            "height": 152.49993896484376
+            "x": -1484.571533203125,
+            "y": 627.4285278320313,
+            "width": 148.0,
+            "height": 154.85723876953126
         }
     },
     "m_Slots": [
@@ -2555,7 +2555,7 @@
     "m_StageCapability": 3,
     "m_Value": {
         "x": 0.5,
-        "y": 0.5
+        "y": 0.4000000059604645
     },
     "m_DefaultValue": {
         "x": 0.5,
@@ -2759,10 +2759,10 @@
         "m_Expanded": true,
         "m_Position": {
             "serializedVersion": "2",
-            "x": -670.5,
-            "y": 740.0,
-            "width": 207.99996948242188,
-            "height": 336.5
+            "x": -726.2857666015625,
+            "y": 702.857177734375,
+            "width": 209.142822265625,
+            "height": 338.857177734375
         }
     },
     "m_Slots": [
