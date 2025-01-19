@@ -71,8 +71,7 @@ namespace KKL.Ronda.Networking
         public void AdvanceTurn(ulong nextPlayerId)
         {
             if (!IsServer) return;
-        
-            Debug.Log($"TurnManager: Advancing turn to player {nextPlayerId}");
+            
             CurrentPlayerTurnId.Value = nextPlayerId;
             _turnTimeRemaining.Value = TurnTimeLimit;
             _isTurnActive.Value = true;
@@ -107,7 +106,7 @@ namespace KKL.Ronda.Networking
         
         private void UpdateTimerDisplay()
         {
-            if (timerText != null)
+            if (timerText)
             {
                 timerText.text = $"{Mathf.CeilToInt(_turnTimeRemaining.Value)}";
                 timerText.color = _turnTimeRemaining.Value <= TurnWarningTime ? Color.red : Color.white;
@@ -117,7 +116,7 @@ namespace KKL.Ronda.Networking
         [ClientRpc]
         private void UpdateTurnIndicatorClientRpc(ulong currentPlayerId)
         {
-            if (turnIndicatorText != null)
+            if (turnIndicatorText)
             {
                 bool isLocalPlayerTurn = currentPlayerId == NetworkManager.LocalClientId;
                 turnIndicatorText.text = isLocalPlayerTurn ? "You" : "Opponent";

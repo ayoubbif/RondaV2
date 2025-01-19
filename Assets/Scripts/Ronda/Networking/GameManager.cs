@@ -10,10 +10,6 @@ using UnityEngine.UI;
 
 namespace KKL.Ronda.Networking
 {
-    /// <summary>
-    /// Manages the core game logic and networking for the Ronda card game.
-    /// Handles card dealing, player interactions, scoring, and synchronization across the network.
-    /// </summary>
     public class GameManager : NetworkBehaviour
     {
         #region Fields and Properties
@@ -43,20 +39,19 @@ namespace KKL.Ronda.Networking
     
         // Game State
         private int _numCardsToDeal;
-        private Action<ulong> _onCardsDealt;
-        private bool _isEmptyHanded;
-        private bool _canCapture;
         private const int InitialTableCards = 4;
         private const int CardsPerDeal = 3;
+        private Action<ulong> _onCardsDealt;
+        private readonly NetworkVariable<bool> _isEmptyHanded = new();
         private readonly NetworkVariable<GameState> _currentGameState = new();
+        private bool _canCapture;
+        private bool _isFirstDeal = true;
         [SerializeField] public TurnManager turnManager;
         [SerializeField] private TMP_Text turnIndicatorText;
-        private bool _isGameStarted;
-
         private enum GameState
         {
             Dealing,
-            Playing,
+            Playing
         }
 
         #endregion
@@ -83,21 +78,23 @@ namespace KKL.Ronda.Networking
             {
                 Instance = this;
                 turnManager.Initialize();
+                _isEmptyHanded.OnValueChanged += OnEmptyHandedChanged;
             }
             else
             {
                 Destroy(gameObject);
             }
         }
+        
+        private new void OnDestroy()
+        {
+            _isEmptyHanded.OnValueChanged -= OnEmptyHandedChanged;
+        }
 
         #endregion
 
         #region Server Logic
-
-        /// <summary>
-        /// Handles the dealing of cards from the server to all players.
-        /// Initializes the deck if necessary and validates the configuration.
-        /// </summary>
+        
         private void S_Deal()
         {
             if (!IsServer || Players.Count < MaxNumPlayers)
@@ -133,15 +130,13 @@ namespace KKL.Ronda.Networking
             
             Debug.Log($"Server: {_deck.Cards.Count} cards remaining in deck");
             
-            if (!_isGameStarted)
+            if (_isFirstDeal)
             {
                 InitializeTurnOrder();
+                _isFirstDeal = false;
             }
         }
 
-        /// <summary>
-        /// Deals cards from the deck to all players.
-        /// </summary>
         private void DealFromDeck()
         {
             _numCardsToDeal = _deck.Cards.Count <= CardsPerDeal * 2 ? _deck.Cards.Count / 2 : CardsPerDeal;
@@ -192,15 +187,10 @@ namespace KKL.Ronda.Networking
             Debug.Log($"Advancing turn from player {currentPlayerId} to player {Players[nextIndex].OwnerClientId}");
             turnManager.AdvanceTurn(Players[nextIndex].OwnerClientId);
         }
+        
         #endregion
 
         #region Game Logic
-        
-        /// <summary>
-        /// Processes a played card, handling captures and table placement.
-        /// </summary>
-        /// <param name="playedCard">The card that was played</param>
-        /// <param name="player">The player who played the card</param>
         private void ProcessPlayedCard(Card playedCard, Player player)
         {
             _canCapture = Rules.CanCapture(playedCard, table.Cards);
@@ -216,19 +206,28 @@ namespace KKL.Ronda.Networking
             
             CheckForEmptyHandAndDeal();
         }
-
-        /// <summary>
-        /// Checks if all players have empty hands and triggers a new deal if necessary.
-        /// </summary>
+        
+        private void OnEmptyHandedChanged(bool previousValue, bool newValue)
+        {
+            if (IsServer && newValue && Players.Count == 2)
+            {
+                if (_deck.Cards.Count > 0)  // Only deal if there are cards remaining
+                {
+                    StartCoroutine(DealAfterDelay(5f));
+                }
+                else
+                {
+                    // Handle end of game or final scoring
+                    HandleEndOfGame();
+                }
+            }
+        }
+        
         private void CheckForEmptyHandAndDeal()
         {
-            if (Players.Count != 2 || !_isEmptyHanded) return;
-            StartCoroutine(DealAfterDelay(2f));
+            Debug.Log("Players: " + Players.Count + " IsEmptyHanded: " + _isEmptyHanded);
         }
-
-        /// <summary>
-        /// Handles the capture logic when a card is played that can capture cards from the table.
-        /// </summary>
+        
         private void HandleCardCapture(Card playedCard, Player player)
         {
             var captureableCards = Rules.GetMandatoryCaptureCards(playedCard, table.Cards);
@@ -244,6 +243,16 @@ namespace KKL.Ronda.Networking
                 NotifyServerToRemoveMatchingCardsClientRpc(playedCard, captureableCards.ToArray());
                 UpdateScoreClientRpc(player.OwnerClientId, player.Score);
             }
+        }
+        
+        private void HandleEndOfGame()
+        {
+            // Example: Calculate final scores and declare winner
+            var winner = Players.OrderByDescending(p => p.Score).First();
+            Debug.Log($"Game Over! Player {winner.OwnerClientId} wins with {winner.Score} points!");
+        
+            // Notify clients about game end
+            GameOverClientRpc(winner.OwnerClientId, winner.Score);
         }
         
         #endregion
@@ -264,7 +273,9 @@ namespace KKL.Ronda.Networking
             if (LocalPlayer.OwnerClientId == playerId)
             {
                 LocalPlayer.AddCardsToHand(cards.ToList());
-                _isEmptyHanded = false;
+                
+                // Notify server about cards being added
+                NotifyCardsAddedServerRpc();
             }
         }
 
@@ -280,7 +291,6 @@ namespace KKL.Ronda.Networking
             }
 
             SpawnCardOnTable(playedCard);
-            _isEmptyHanded = players.All(player => player.CardsInHand.Count == 0);
         }
 
         [ClientRpc]
@@ -367,13 +377,19 @@ namespace KKL.Ronda.Networking
                 }
             }
         }
+        
+        [ClientRpc]
+        private void GameOverClientRpc(ulong winnerId, uint finalScore)
+        {
+            // Update UI or show game over screen
+            Debug.Log($"Game Over! Player {winnerId} wins with {finalScore} points!");
+            // Add your UI update logic here
+        }
+        
         #endregion
 
         #region ServerRPC Methods
-
-        /// <summary>
-        /// Handles the server-side logic when a card is played.
-        /// </summary>
+        
         [ServerRpc(RequireOwnership = false)]
         public void OnCardPlayedServerRpc(int codedCard, ulong playerId)
         {
@@ -394,11 +410,21 @@ namespace KKL.Ronda.Networking
             Card playedCard = CardConverter.DecodeCodedCard(codedCard);
             NotifyServerOnCardPlayedClientRpc(codedCard, playerId);
             RemoveCardFromEnemyHandClientRpc(playerId);
-            
+
             ProcessPlayedCard(playedCard, player);
+            _isEmptyHanded.Value = players.All(p => p.CardsInHand.Count == 0);
             
             // Advance to next player's turn after card is played
             AdvanceTurn();
+        }
+        
+        [ServerRpc(RequireOwnership = false)]
+        private void NotifyCardsAddedServerRpc()
+        {
+            if (IsServer)
+            {
+                _isEmptyHanded.Value = false;
+            }
         }
 
         #endregion

@@ -84,7 +84,6 @@ namespace KKL.Ronda.Networking
         private void AddPlayerClientRpc()
         {
             GameManager.AddPlayer(this);
-            Debug.Log($"Player count: {GameManager.Players.Count}");
         }
 
         [ServerRpc]
