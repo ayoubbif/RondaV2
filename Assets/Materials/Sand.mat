@@ -52,14 +52,14 @@ Material:
     - _Scale: 33
     - _SpeedX: 0.2
     - _SpeedY: 0.1
-    - _WindSpeed: 1.2
+    - _WindSpeed: 1.5
     - _WindStrength: 0.3
     - _ZWrite: 0
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _HighlightColor: {r: 1, g: 0.95, b: 0.7, a: 1}
-    - _MainColor: {r: 0.20188378, g: 0.6318403, b: 0.76819396, a: 1}
+    - _MainColor: {r: 0.38964033, g: 0.53638804, b: 0.4568997, a: 1}
     - _RendererColor: {r: 1, g: 1, b: 1, a: 1}
-    - _SecondaryColor: {r: 1, g: 0.38461542, b: 0, a: 1}
+    - _SecondaryColor: {r: 0.5525606, g: 0.18851629, b: 0.17500234, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
