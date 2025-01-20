@@ -1,4 +1,5 @@
 ﻿using System;
+using DG.Tweening;
 using KKL.Ronda.Networking;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -22,7 +23,15 @@ namespace KKL.Ronda.Core
         [SerializeField] private Color hoverOutlineColor = new(1f, 0.92f, 0.016f, 1f); // Golden yellow
         [SerializeField] private Color dragColor = new(1f, 1f, 1f, 0.8f); // Slightly transparent white
         
+        // Animation parameters
+        [SerializeField] private float hoverScaleDuration = 0.2f;
+        [SerializeField] private float hoverScaleMultiplier = 1.1f;
+        [SerializeField] private Ease hoverScaleEase = Ease.OutBack;
+        
+        private Vector3 _originalScale;
         private Color _originalCardColor;
+        private readonly Vector2 _normalOutlineEffect = new(1, -1);
+        private readonly Vector2 _hoverOutlineEffect = new(2, -2);
         
         private static GameManager GameManager => GameManager.Instance;
         private TurnManager TurnManager => GameManager.turnManager;
@@ -42,15 +51,16 @@ namespace KKL.Ronda.Core
                     return;
                 }
 
-                // Store original color
+                // Store original values
                 _originalCardColor = _cardImage.color;
+                _originalScale = transform.localScale;
                 
                 // Configure outline
                 if (_outline != null)
                 {
                     _outline.enabled = false;
                     _outline.effectColor = hoverOutlineColor;
-                    _outline.effectDistance = new Vector2(2, -2);
+                    _outline.effectDistance = _normalOutlineEffect;
                 }
 
                 _parent = transform.parent;
@@ -68,7 +78,8 @@ namespace KKL.Ronda.Core
         {
             if (_isPlayerCard && !_isDragging && TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
             {
-                EnableOutline();
+                EnableOutline(true);
+                AnimateHoverScale(true);
             }
         }
 
@@ -76,15 +87,17 @@ namespace KKL.Ronda.Core
         {
             if (!_isDragging)
             {
-                DisableOutline();
+                EnableOutline(false);
+                AnimateHoverScale(false);
             }
         }
 
-        private void EnableOutline()
+        private void EnableOutline(bool isHovering)
         {
             if (_outline != null)
             {
                 _outline.enabled = true;
+                _outline.effectDistance = isHovering ? _hoverOutlineEffect : _normalOutlineEffect;
             }
         }
 
@@ -94,6 +107,17 @@ namespace KKL.Ronda.Core
             {
                 _outline.enabled = false;
             }
+        }
+
+        private void AnimateHoverScale(bool isHovering)
+        {
+            // Kill any existing scale animations
+            transform.DOKill();
+            
+            Vector3 targetScale = isHovering ? _originalScale * hoverScaleMultiplier : _originalScale;
+            
+            transform.DOScale(targetScale, hoverScaleDuration)
+                .SetEase(hoverScaleEase);
         }
 
         public void OnPointerDown(PointerEventData eventData)
@@ -112,7 +136,7 @@ namespace KKL.Ronda.Core
             
             // Apply drag visual effects
             _cardImage.color = dragColor;
-            DisableOutline();
+            // Keep outline enabled during drag
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -161,11 +185,22 @@ namespace KKL.Ronda.Core
             if (IsPointerReleasedOnTable(eventData))
             {
                 PlayCardOnTable(eventData.pointerEnter.transform);
+                // Only disable outline when card is played
                 DisableOutline();
+                // Reset scale when played
+                transform.localScale = _originalScale;
             }
             else
             {
                 ReturnCardToHand();
+                // Re-enable outline if still hovering
+                if (RectTransformUtility.RectangleContainsScreenPoint(
+                    GetComponent<RectTransform>(),
+                    Input.mousePosition,
+                    null))
+                {
+                    EnableOutline(true);
+                }
             }
         }
 
@@ -189,10 +224,18 @@ namespace KKL.Ronda.Core
                 return;
             }
 
+            // Deactivate all visual effects when card is played
+            DisableOutline();
+            transform.DOKill(); // Kill any ongoing animations
+            transform.localScale = _originalScale; // Reset scale immediately
+            
             SetCardParentAndPosition(table);
             _card = CardConverter.GetCardValueFromGameObject(gameObject);
             
             GameManager.OnCardPlayedServerRpc(CardConverter.GetCodedCard(_card), localPlayerId);
+            
+            // Disable hover interactions once the card is on the table
+            _isPlayerCard = false;
         }
 
         private void ReturnCardToHand()
@@ -209,7 +252,6 @@ namespace KKL.Ronda.Core
 
         #region Visual Feedback
         
-
         private void ShowInvalidMoveMessage()
         {
             if (_isPlayerCard && !TurnManager.IsPlayerTurn(GameManager.LocalPlayer.OwnerClientId))
@@ -238,5 +280,11 @@ namespace KKL.Ronda.Core
         }
         
         #endregion
+
+        private void OnDisable()
+        {
+            // Kill any running animations when the object is disabled
+            transform.DOKill();
+        }
     }
 }

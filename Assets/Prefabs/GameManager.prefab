@@ -45,8 +45,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 3305979239
-  InScenePlacedSourceGlobalObjectIdHash: 0
+  GlobalObjectIdHash: 4007705751
+  InScenePlacedSourceGlobalObjectIdHash: 513495149
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
@@ -71,11 +71,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ShowTopMostFoldoutHeaderGroup: 0
-  cardPrefab: {fileID: 1000016203661699412, guid: ba4e7df22876e054492f39ceefc2624c, type: 3}
-  playerHand: {fileID: 0}
-  enemyHand: {fileID: 0}
   table: {fileID: 0}
-  scoreText: {fileID: 0}
   players: []
   turnManager: {fileID: 0}
-  turnIndicatorText: {fileID: 0}

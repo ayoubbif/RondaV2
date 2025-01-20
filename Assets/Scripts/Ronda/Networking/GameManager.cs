@@ -3,10 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using KKL.Ronda.Core;
-using TMPro;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace KKL.Ronda.Networking
 {
@@ -16,13 +14,8 @@ namespace KKL.Ronda.Networking
 
         // Singleton instance
         public static GameManager Instance { get; private set; }
-
-        // UI References
-        [SerializeField] private GameObject cardPrefab;
-        [SerializeField] private Transform playerHand;
-        [SerializeField] private Transform enemyHand;
+        
         [SerializeField] private Table table;
-        [SerializeField] private TMP_Text scoreText;
 
         // Game Constants
         private const int MaxNumPlayers = 2;
@@ -47,9 +40,6 @@ namespace KKL.Ronda.Networking
         private bool _canCapture;
         private bool _isFirstDeal = true;
         [SerializeField] public TurnManager turnManager;
-        [SerializeField] private TMP_Text turnIndicatorText;
-        [SerializeField] private TMP_Text announcementText;
-        [SerializeField] private float specialAnnouncementDelay = 3f;
         private readonly NetworkVariable<bool> _hasAnnouncedRonda = new();
         private readonly NetworkVariable<bool> _hasAnnouncedTringa = new();
 
@@ -347,7 +337,7 @@ namespace KKL.Ronda.Networking
             StartNewRound();
     
             // Show round end announcement
-            StartCoroutine(ShowRoundEndAnnouncement(playerWithMostCards.OwnerClientId, extraPoints));
+            ShowRoundEndClientRpc(playerWithMostCards.OwnerClientId, extraPoints);
         }
         
         private void StartNewRound()
@@ -423,7 +413,8 @@ namespace KKL.Ronda.Networking
         [ClientRpc]
         private void AnnounceSpecialCombinationClientRpc(ulong playerId, string combinationType, int value)
         {
-            StartCoroutine(ShowSpecialCombinationAnnouncement(playerId, combinationType, value));
+            bool isLocalPlayer = NetworkManager.Singleton.LocalClientId == playerId;
+            UIManager.Instance.ShowSpecialCombination(isLocalPlayer, combinationType, value);
         }
 
         [ClientRpc]
@@ -444,27 +435,11 @@ namespace KKL.Ronda.Networking
         private void NotifyServerToRemoveMatchingCardsClientRpc(Card card, Card[] capturedCards)
         {
             var cardsToRemove = new HashSet<Card>(capturedCards) { card };
-
             foreach (var cardToRemove in cardsToRemove)
             {
                 table.RemoveCardFromTable(cardToRemove.Suit, cardToRemove.Value);
             }
-
-            SetCardObjectsInactiveClientRpc(cardsToRemove.ToArray());
-        }
-        
-
-        [ClientRpc]
-        private void SetCardObjectsInactiveClientRpc(Card[] cardsToRemove)
-        {
-            foreach (var cardToRemove in cardsToRemove)
-            {
-                GameObject cardObject = FindCardObjectOnTable(cardToRemove);
-                if (cardObject != null)
-                {
-                    cardObject.SetActive(false);
-                }
-            }
+            UIManager.Instance.SetCardsInactive(cardsToRemove.ToArray());
         }
 
         [ClientRpc]
@@ -478,9 +453,7 @@ namespace KKL.Ronda.Networking
         {
             if (NetworkManager.Singleton.LocalClientId != playerId)
             {
-                if (enemyHand.childCount <= 0) return;
-                GameObject lastCard = enemyHand.GetChild(enemyHand.childCount - 1).gameObject;
-                Destroy(lastCard);
+                UIManager.Instance.RemoveCardFromEnemyHand();
             }
         }
 
@@ -528,43 +501,35 @@ namespace KKL.Ronda.Networking
         [ClientRpc]
         private void ClearTableClientRpc()
         {
-            // Clear all cards from the table
-            foreach (Transform child in table.transform)
-            {
-                Destroy(child.gameObject);
-            }
             table.Cards.Clear();
+            UIManager.Instance.ClearTable();
         }
         
         [ClientRpc]
         private void GameOverClientRpc(ulong winnerId, uint finalScore)
         {
-            // Update UI or show game over screen
-            Debug.Log($"Game Over! Player {winnerId} wins with {finalScore} points!");
-            // Add your UI update logic here
+            bool isLocalPlayer = NetworkManager.Singleton.LocalClientId == winnerId;
+            UIManager.Instance.ShowGameOver(isLocalPlayer, finalScore);
+        }
+        
+        [ClientRpc]
+        private void ShowRoundEndClientRpc(ulong winnerId, int extraPoints)
+        {
+            bool isLocalPlayer = NetworkManager.Singleton.LocalClientId == winnerId;
+            UIManager.Instance.ShowRoundEnd(isLocalPlayer, extraPoints);
         }
         
         [ClientRpc]
         private void ResetPlayerCardsClientRpc(ulong playerId)
         {
             var player = Players.FirstOrDefault(p => p.OwnerClientId == playerId);
-            if (player != null)
+            if (player != null && player.IsLocalPlayer)
             {
-                // Clear hand visually
-                if (player.IsLocalPlayer)
-                {
-                    foreach (Transform child in playerHand)
-                    {
-                        Destroy(child.gameObject);
-                    }
-                }
-                else
-                {
-                    foreach (Transform child in enemyHand)
-                    {
-                        Destroy(child.gameObject);
-                    }
-                }
+                UIManager.Instance.UpdatePlayerHand(Array.Empty<Card>());
+            }
+            else
+            {
+                UIManager.Instance.UpdateEnemyHand(Array.Empty<Card>());
             }
         }
         
@@ -651,20 +616,7 @@ namespace KKL.Ronda.Networking
         /// </summary>
         private void SpawnCardOnTable(Card card)
         {
-            GameObject cardObject = Instantiate(cardPrefab, table.transform);
-            Image cardImage = cardObject.GetComponent<Image>();
-
-            string path = $"Sprites/Cards/{(int)card.Suit}_{(int)card.Value}";
-            Sprite sprite = Resources.Load<Sprite>(path);
-
-            if (!sprite)
-            {
-                Debug.LogError($"Sprite not found at path: {path}");
-                return;
-            }
-
-            cardImage.sprite = sprite;
-            cardObject.name = $"{(int)card.Suit}_{(int)card.Value}";
+            UIManager.Instance.SpawnCardOnTable(card);
         }
 
         /// <summary>
@@ -678,7 +630,7 @@ namespace KKL.Ronda.Networking
                 return;
             }
 
-            SpriteConverter.UpdatePlayerCardImages(LocalPlayer.Cards, cardPrefab, playerHand);
+            UIManager.Instance.UpdatePlayerHand(LocalPlayer.Cards);
         }
 
         /// <summary>
@@ -691,28 +643,10 @@ namespace KKL.Ronda.Networking
                 LocalPlayer.InitializeCards(_numCardsToDeal);
                 return;
             }
-            
-            SpriteConverter.UpdateEnemyCardImages(LocalPlayer.Cards, cardPrefab, enemyHand);
-        }
-        
-        private IEnumerator ShowSpecialCombinationAnnouncement(ulong playerId, string combinationType, int value)
-        {
-            // Here you would show a UI element announcing the special combination
-            string playerName = playerId == NetworkManager.Singleton.LocalClientId ? "You" : "Opponent";
-            string announcement = $"{playerName} announced {combinationType} of {value}s!";
     
-            // Assuming you have a UI text element for announcements
-            if (announcementText)
-            {
-                string originalText = announcementText.text;
-                announcementText.text = announcement;
-        
-                yield return new WaitForSeconds(specialAnnouncementDelay);
-        
-                announcementText.text = originalText;
-            }
+            UIManager.Instance.UpdateEnemyHand(LocalPlayer.Cards);
         }
-
+        
         private void ResetSpecialCombinations()
         {
             if (!IsServer) return;
@@ -737,21 +671,11 @@ namespace KKL.Ronda.Networking
         }
 
         /// <summary>
-        /// Finds a card object on the table by its card data.
-        /// </summary>
-        private GameObject FindCardObjectOnTable(Card card)
-        {
-            return (from Transform child in table.transform
-                where child.name == $"{(int)card.Suit}_{(int)card.Value}"
-                select child.gameObject).FirstOrDefault();
-        }
-
-        /// <summary>
         /// Updates the score UI for the local player.
         /// </summary>
         public void UpdateScoreUI()
         {
-            scoreText.text = LocalPlayer.Score.ToString();
+            UIManager.Instance.UpdateScore(LocalPlayer.Score);
         }
 
         /// <summary>
@@ -762,23 +686,6 @@ namespace KKL.Ronda.Networking
             yield return new WaitForSeconds(delay);
             S_Deal();
         }
-        
-        private IEnumerator ShowRoundEndAnnouncement(ulong winnerId, int extraPoints)
-        {
-            if (announcementText)
-            {
-                string playerName = winnerId == NetworkManager.Singleton.LocalClientId ? "You" : "Opponent";
-                string announcement = $"Round Over! {playerName} captured most cards (+{extraPoints} points)";
-                
-                // Show announcement
-                announcementText.text = announcement;
-
-                yield return new WaitForSeconds(specialAnnouncementDelay);
-
-                announcementText.text = "";
-            }
-        }
-
         #endregion
     }
 }
