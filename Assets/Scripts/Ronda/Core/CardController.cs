@@ -206,10 +206,26 @@ namespace KKL.Ronda.Core
 
         private bool IsPointerReleasedOnTable(PointerEventData eventData)
         {
-            return eventData.pointerEnter != null && eventData.pointerEnter.name == "Table";
+            if (eventData.pointerEnter == null) return false;
+            
+            // Check if the object is the table itself
+            if (eventData.pointerEnter.name == "Table") return true;
+            
+            // Check if the object is a child of the table
+            Transform current = eventData.pointerEnter.transform;
+            while (current.parent != null)
+            {
+                if (current.parent.name == "Table")
+                {
+                    return true;
+                }
+                current = current.parent;
+            }
+            
+            return false;
         }
 
-        private void PlayCardOnTable(Transform table)
+        private void PlayCardOnTable(Transform releaseTarget)
         {
             var localPlayerId = GameManager.LocalPlayer.OwnerClientId;
         
@@ -224,12 +240,26 @@ namespace KKL.Ronda.Core
                 return;
             }
 
+            // Find the actual table transform if released on a child
+            Transform tableTransform = releaseTarget;
+            while (tableTransform != null && tableTransform.name != "Table")
+            {
+                tableTransform = tableTransform.parent;
+            }
+
+            if (tableTransform == null)
+            {
+                Debug.LogError("Could not find table transform!");
+                ReturnCardToHand();
+                return;
+            }
+
             // Deactivate all visual effects when card is played
             DisableOutline();
             transform.DOKill(); // Kill any ongoing animations
             transform.localScale = _originalScale; // Reset scale immediately
             
-            SetCardParentAndPosition(table);
+            SetCardParentAndPosition(tableTransform);
             _card = CardConverter.GetCardValueFromGameObject(gameObject);
             
             GameManager.OnCardPlayedServerRpc(CardConverter.GetCodedCard(_card), localPlayerId);
@@ -237,7 +267,7 @@ namespace KKL.Ronda.Core
             // Disable hover interactions once the card is on the table
             _isPlayerCard = false;
         }
-
+        
         private void ReturnCardToHand()
         {
             SetCardParentAndPosition(_parent);
