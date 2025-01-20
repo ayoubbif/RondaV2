@@ -83,7 +83,7 @@ namespace KKL.Ronda.Core
                 throw new InvalidOperationException("No Tringa found in hand");
 
             return handCards.GroupBy(c => c.Value)
-                .Where(g => g.Count() == 2)
+                .Where(g => g.Count() == 3)
                 .Select(g => g.Key)
                 .Max();
         }

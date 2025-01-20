@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 1711553340123011668}
   - component: {fileID: 7094862360355255014}
   - component: {fileID: 3471084403099699229}
-  - component: {fileID: 1245938853852670338}
+  - component: {fileID: 1242225265629135324}
   m_Layer: 5
   m_Name: Card
   m_TagString: Untagged
@@ -91,9 +91,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   invalidMoveShakeDuration: 0.5
   invalidMoveShakeIntensity: 10
-  hoverOutlineColor: {r: 0.07127333, g: 1, b: 0, a: 1}
-  dragColor: {r: 0.7142856, g: 0.35893673, b: 0.16846348, a: 0.48235294}
---- !u!114 &1245938853852670338
+  hoverOutlineColor: {r: 0.09181486, g: 0.9083557, b: 0.26576674, a: 1}
+  dragColor: {r: 0.8624447, g: 0.9083557, b: 0.1652668, a: 0.9607843}
+--- !u!114 &1242225265629135324
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -106,5 +106,5 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_EffectColor: {r: 0, g: 0, b: 0, a: 0.5}
-  m_EffectDistance: {x: 3, y: -3}
+  m_EffectDistance: {x: 1, y: -1}
   m_UseGraphicAlpha: 1
