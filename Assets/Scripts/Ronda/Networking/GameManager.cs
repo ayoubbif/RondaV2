@@ -49,14 +49,15 @@ namespace KKL.Ronda.Networking
         [SerializeField] public TurnManager turnManager;
         [SerializeField] private TMP_Text turnIndicatorText;
         [SerializeField] private TMP_Text announcementText;
-        [SerializeField] private float specialAnnouncementDelay = 2f;
+        [SerializeField] private float specialAnnouncementDelay = 3f;
         private readonly NetworkVariable<bool> _hasAnnouncedRonda = new();
         private readonly NetworkVariable<bool> _hasAnnouncedTringa = new();
 
         private enum GameState
         {
             Dealing,
-            Playing
+            Playing,
+            GameOver
         }
 
         #endregion
@@ -283,56 +284,116 @@ namespace KKL.Ronda.Networking
             {
                 AddCardToTableClientRpc(playedCard);
             }
-            
-            CheckForEmptyHandAndDeal();
         }
         
         private void OnEmptyHandedChanged(bool previousValue, bool newValue)
         {
             if (IsServer && newValue && Players.Count == 2)
             {
-                if (_deck.Cards.Count > 0)  // Only deal if there are cards remaining
+                if (_deck.Cards.Count > 0) 
                 {
-                    StartCoroutine(DealAfterDelay(5f));
+                    StartCoroutine(DealAfterDelay(3f));
                 }
                 else
                 {
-                    // Handle end of game or final scoring
-                    HandleEndOfGame();
+                    HandleEndOfRound();
                 }
             }
-        }
-        
-        private void CheckForEmptyHandAndDeal()
-        {
-            Debug.Log("Players: " + Players.Count + " IsEmptyHanded: " + _isEmptyHanded);
         }
         
         private void HandleCardCapture(Card playedCard, Player player)
         {
             var captureableCards = Rules.GetMandatoryCaptureCards(playedCard, table.Cards);
-            
+    
             if (captureableCards.Any())
             {
-                int capturePoints = captureableCards.Count;
-                
-                // Award capture points to the player
-                player.AddScore((uint)capturePoints);
-                Debug.Log($"Player {player.OwnerClientId} scored {capturePoints} points. Total: {player.Score}");
+                // Add captured cards to player's captured cards collection
+                player.AddCapturedCards(captureableCards);
                 
                 NotifyServerToRemoveMatchingCardsClientRpc(playedCard, captureableCards.ToArray());
-                UpdateScoreClientRpc(player.OwnerClientId, player.Score);
             }
+        }
+        
+        private void HandleEndOfRound()
+        {
+            if (!IsServer) return;
+
+            // Calculate points for captured cards
+            var playersByCardCount = Players.OrderByDescending(p => p.CapturedCards.Count).ToList();
+            var playerWithMostCards = playersByCardCount[0];
+            var playerWithFewerCards = playersByCardCount[1];
+            
+            int extraPoints = Rules.CalculateExtraCardPoints(playerWithMostCards.CapturedCards.Count, 
+                playerWithFewerCards.CapturedCards.Count);
+
+            // Award points to the player with most cards
+            if (extraPoints > 0)
+            {
+                playerWithMostCards.AddScore((uint)extraPoints);
+                UpdateScoreClientRpc(playerWithMostCards.OwnerClientId, playerWithMostCards.Score);
+            }
+
+            // Check if any player has reached 41 points
+            var winningPlayer = Players.FirstOrDefault(p => p.Score >= 41);
+
+    
+            if (winningPlayer != null)
+            {
+                HandleEndOfGame();
+                return;
+            }
+
+            // If no winner yet, start new round
+            StartNewRound();
+    
+            // Show round end announcement
+            StartCoroutine(ShowRoundEndAnnouncement(playerWithMostCards.OwnerClientId, extraPoints));
+        }
+        
+        private void StartNewRound()
+        {
+            if (!IsServer) return;
+
+            // Reset game state
+            _isDeckInitialized = false;
+            _isFirstDeal = true;
+            
+            // Clear table cards
+            ClearTableClientRpc();
+    
+            // Clear player hands and captured cards
+            foreach (var player in Players)
+            {
+                player.InitializeCards(0);
+                ResetPlayerCardsClientRpc(player.OwnerClientId);
+            }
+    
+            // Start new deal after a delay
+            StartCoroutine(DealAfterDelay(2f));
         }
         
         private void HandleEndOfGame()
         {
-            // Example: Calculate final scores and declare winner
-            var winner = Players.OrderByDescending(p => p.Score).First();
-            Debug.Log($"Game Over! Player {winner.OwnerClientId} wins with {winner.Score} points!");
-        
-            // Notify clients about game end
+            if (!IsServer) return;
+
+            // Find player with winning score (41 or above)
+            var winner = Players.FirstOrDefault(p => p.Score >= 41);
+    
+            if (winner == null)
+            {
+                if (winner != null) Debug.Log(winner.Score);
+                Debug.LogError("HandleEndOfGame called but no player has winning score!");
+                return;
+            }
+    
+            // Update game state
+            _currentGameState.Value = GameState.GameOver;
+    
+            // Announce winner
             GameOverClientRpc(winner.OwnerClientId, winner.Score);
+    
+            // Optional: Save game statistics or handle any cleanup
+            SaveGameStatisticsServerRpc(winner.OwnerClientId, winner.Score);
         }
         
         #endregion
@@ -465,11 +526,46 @@ namespace KKL.Ronda.Networking
         }
         
         [ClientRpc]
+        private void ClearTableClientRpc()
+        {
+            // Clear all cards from the table
+            foreach (Transform child in table.transform)
+            {
+                Destroy(child.gameObject);
+            }
+            table.Cards.Clear();
+        }
+        
+        [ClientRpc]
         private void GameOverClientRpc(ulong winnerId, uint finalScore)
         {
             // Update UI or show game over screen
             Debug.Log($"Game Over! Player {winnerId} wins with {finalScore} points!");
             // Add your UI update logic here
+        }
+        
+        [ClientRpc]
+        private void ResetPlayerCardsClientRpc(ulong playerId)
+        {
+            var player = Players.FirstOrDefault(p => p.OwnerClientId == playerId);
+            if (player != null)
+            {
+                // Clear hand visually
+                if (player.IsLocalPlayer)
+                {
+                    foreach (Transform child in playerHand)
+                    {
+                        Destroy(child.gameObject);
+                    }
+                }
+                else
+                {
+                    foreach (Transform child in enemyHand)
+                    {
+                        Destroy(child.gameObject);
+                    }
+                }
+            }
         }
         
         #endregion
@@ -504,6 +600,13 @@ namespace KKL.Ronda.Networking
             AdvanceTurn();
         }
         
+        [ServerRpc]
+        private void SaveGameStatisticsServerRpc(ulong winnerId, uint finalScore)
+        {
+            // Add any game statistics saving logic here
+            Debug.Log($"Game statistics saved - Winner: {winnerId}, Final Score: {finalScore}");
+        }
+        
         [ServerRpc(RequireOwnership = false)]
         private void NotifyCardsAddedServerRpc()
         {
@@ -525,7 +628,7 @@ namespace KKL.Ronda.Networking
             players.Add(newPlayer);
             
             if (Players.Count == 2)
-                StartCoroutine(DealAfterDelay(1f));
+                StartCoroutine(DealAfterDelay(2f));
         }
 
         /// <summary>
@@ -554,7 +657,7 @@ namespace KKL.Ronda.Networking
             string path = $"Sprites/Cards/{(int)card.Suit}_{(int)card.Value}";
             Sprite sprite = Resources.Load<Sprite>(path);
 
-            if (sprite == null)
+            if (!sprite)
             {
                 Debug.LogError($"Sprite not found at path: {path}");
                 return;
@@ -658,6 +761,22 @@ namespace KKL.Ronda.Networking
         {
             yield return new WaitForSeconds(delay);
             S_Deal();
+        }
+        
+        private IEnumerator ShowRoundEndAnnouncement(ulong winnerId, int extraPoints)
+        {
+            if (announcementText)
+            {
+                string playerName = winnerId == NetworkManager.Singleton.LocalClientId ? "You" : "Opponent";
+                string announcement = $"Round Over! {playerName} captured most cards (+{extraPoints} points)";
+                
+                // Show announcement
+                announcementText.text = announcement;
+
+                yield return new WaitForSeconds(specialAnnouncementDelay);
+
+                announcementText.text = "";
+            }
         }
 
         #endregion

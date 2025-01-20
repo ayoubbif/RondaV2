@@ -8,8 +8,6 @@ namespace KKL.Ronda.Core
     {
         private const int TotalDeckSize = 40;
         private const int WinningScore = 41;
-        private const int ExtraCardPoint = 1;
-        private const int MaxExtraCardPoints = 20;
 
         /// <summary>
         /// Validates initial table cards according to game rules.
@@ -157,8 +155,8 @@ namespace KKL.Ronda.Core
                 return 0;
             
             var extraCards = playerCardCount - opponentCardCount;
-            var points = extraCards * ExtraCardPoint;
-            return Math.Min(points, MaxExtraCardPoints);
+            var points = extraCards;
+            return points;
         }
 
         /// <summary>

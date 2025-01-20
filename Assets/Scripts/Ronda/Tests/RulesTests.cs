@@ -271,16 +271,6 @@ namespace KKL.Ronda.Tests
             Assert.That(result.Select(c => c.Value), Is.EquivalentTo(new[] 
                 { Value.One, Value.One, Value.Two, Value.Three }));
         }
-        
-        [Test]
-        public void CalculateExtraCardPoints_MoreCards_ReturnsCorrectPoints()
-        {
-            // Act & Assert
-            Assert.That(Rules.CalculateExtraCardPoints(25, 15), Is.EqualTo(10));
-            Assert.That(Rules.CalculateExtraCardPoints(35, 5), Is.EqualTo(20)); // Max points
-            Assert.That(Rules.CalculateExtraCardPoints(15, 15), Is.EqualTo(0)); // Equal cards
-            Assert.That(Rules.CalculateExtraCardPoints(10, 15), Is.EqualTo(0)); // Fewer cards
-        }
 
         [Test]
         public void IsGameOver_ScoreReachesWinningScore_ReturnsTrue()

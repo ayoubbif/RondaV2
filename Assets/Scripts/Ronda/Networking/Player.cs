@@ -2,19 +2,19 @@
 using System.Linq;
 using KKL.Ronda.Core;
 using Unity.Netcode;
-using UnityEngine;
 
 namespace KKL.Ronda.Networking
 {
     public class Player : NetworkBehaviour
     {
-
         private readonly NetworkVariable<uint> _score = new();
+        
+        // Add NetworkList for captured cards
+        private readonly NetworkList<int> _capturedCards = new();
 
-        private static GameManager GameManager => GameManager.Instance; 
+        private static GameManager GameManager => GameManager.Instance;
 
-
-        [SerializeField] private List<Card> cardsInHand;
+        private List<Card> _cardsInHand = new();
 
         public Card[] Cards { get; set; }
         public uint Score
@@ -23,8 +23,22 @@ namespace KKL.Ronda.Networking
             set => _score.Value = value;
         }
 
-        public List<Card> CardsInHand => cardsInHand.ToList();
-    
+        public List<Card> CardsInHand => _cardsInHand.ToList();
+        
+        // Add property to access captured cards
+        public List<Card> CapturedCards
+        {
+            get
+            {
+                var cards = new List<Card>();
+                foreach (var codedCard in _capturedCards)
+                {
+                    cards.Add(CardConverter.DecodeCodedCard(codedCard));
+                }
+                return cards;
+            }
+        }
+
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
@@ -49,7 +63,7 @@ namespace KKL.Ronda.Networking
         {
             GameManager.Instance.UpdateScoreUI();
         }
-    
+        
         public void InitializeCards(int size)
         {
             Cards = new Card[size];
@@ -62,7 +76,7 @@ namespace KKL.Ronda.Networking
 
         public void AddCardsToHand(List<Card> cards)
         {
-            cardsInHand = cards;
+            _cardsInHand = cards;
         }
     
         public void AddScore(uint score)
@@ -72,14 +86,24 @@ namespace KKL.Ronda.Networking
     
         public void RemoveCardFromHand(Value value, Suit suit)
         {
-            Card cardToRemove = cardsInHand.Find(c => c.Value == value && c.Suit == suit);
+            Card cardToRemove = _cardsInHand.Find(c => c.Value == value && c.Suit == suit);
 
             if (cardToRemove != null)
             {
-                cardsInHand.Remove(cardToRemove);
+                _cardsInHand.Remove(cardToRemove);
             }
         }
-    
+        
+        public void AddCapturedCards(IEnumerable<Card> cards)
+        {
+            if (!IsServer) return;
+
+            foreach (var card in cards)
+            {
+                int codedCard = CardConverter.GetCodedCard(card);
+                _capturedCards.Add(codedCard);
+            }
+        }
         [ClientRpc]
         private void AddPlayerClientRpc()
         {
